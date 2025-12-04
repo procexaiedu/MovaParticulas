@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Etherial - Sistema de Partículas Gestual</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+      body { 
+        margin: 0; 
+        overflow: hidden; 
+        background-color: #020205; 
+        font-family: 'Segoe UI', system-ui, sans-serif;
+      }
+      canvas { touch-action: none; }
+      
+      /* Custom Animations */
+      @keyframes spin-slow {
+        from { transform: translate(-50%, -50%) rotate(0deg); }
+        to { transform: translate(-50%, -50%) rotate(360deg); }
+      }
+      
+      .animate-spin-slow {
+        animation: spin-slow 8s linear infinite;
+      }
+      
+      @keyframes pulse-glow {
+        0%, 100% { 
+          filter: drop-shadow(0 0 10px currentColor);
+          opacity: 0.8;
+        }
+        50% { 
+          filter: drop-shadow(0 0 25px currentColor);
+          opacity: 1;
+        }
+      }
+      
+      .animate-pulse-glow {
+        animation: pulse-glow 2s ease-in-out infinite;
+      }
+      
+      @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+      }
+      
+      .animate-float {
+        animation: float 3s ease-in-out infinite;
+      }
+
+      /* Scanline effect for cyberpunk feel */
+      .scanlines::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(0, 255, 255, 0.02) 0px,
+          rgba(0, 255, 255, 0.02) 1px,
+          transparent 1px,
+          transparent 3px
+        );
+        pointer-events: none;
+        z-index: 100;
+      }
+
+      /* Glow text effect */
+      .glow-text {
+        text-shadow: 
+          0 0 5px currentColor,
+          0 0 10px currentColor,
+          0 0 20px currentColor;
+      }
+      
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.3);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(0, 255, 255, 0.3);
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 255, 255, 0.5);
+      }
+    </style>
+    <script>
+      // Tailwind config for custom colors
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'cyber-cyan': '#00ffff',
+              'cyber-magenta': '#ff00ff',
+              'cyber-yellow': '#ffff00',
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "three": "https://aistudiocdn.com/three@^0.181.2",
+    "@react-three/fiber": "https://aistudiocdn.com/@react-three/fiber@^9.4.2",
+    "@react-three/drei": "https://aistudiocdn.com/@react-three/drei@^10.7.7"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="scanlines">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

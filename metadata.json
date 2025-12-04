@@ -1,0 +1,7 @@
+{
+  "name": "Etherial Hand Particles",
+  "description": "A real-time, gesture-controlled 3D particle system. Use your hand to morph shapes and control particle density.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
