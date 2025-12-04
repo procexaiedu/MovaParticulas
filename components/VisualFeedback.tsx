@@ -4,26 +4,22 @@ import { ContinuousHandMetrics } from '../services/handMetrics';
 
 interface VisualFeedbackProps {
   metrics: ContinuousHandMetrics;
-  simulationMode: boolean;
 }
 
-export const VisualFeedback: React.FC<VisualFeedbackProps> = ({ metrics, simulationMode }) => {
+export const VisualFeedback: React.FC<VisualFeedbackProps> = ({ metrics }) => {
   return (
     <div className="fixed inset-0 pointer-events-none z-30 overflow-hidden">
       {/* Screen Edge Glow */}
       <EdgeGlow metrics={metrics} />
       
       {/* Corner Status Indicators */}
-      <CornerIndicators metrics={metrics} simulationMode={simulationMode} />
+      <CornerIndicators metrics={metrics} />
       
       {/* Central Pulse Rings */}
       <PulseRings metrics={metrics} />
       
       {/* Dynamic Vignette */}
       <DynamicVignette metrics={metrics} />
-      
-      {/* Mode Change Notification */}
-      <ModeNotification simulationMode={simulationMode} />
     </div>
   );
 };
@@ -95,10 +91,7 @@ const EdgeGlow: React.FC<{ metrics: ContinuousHandMetrics }> = ({ metrics }) => 
 };
 
 // Corner Status Indicators
-const CornerIndicators: React.FC<{ metrics: ContinuousHandMetrics; simulationMode: boolean }> = ({ 
-  metrics, 
-  simulationMode 
-}) => {
+const CornerIndicators: React.FC<{ metrics: ContinuousHandMetrics }> = ({ metrics }) => {
   const indicators = [
     {
       label: 'ABR',
@@ -245,69 +238,6 @@ const DynamicVignette: React.FC<{ metrics: ContinuousHandMetrics }> = ({ metrics
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     />
-  );
-};
-
-// Mode Change Notification
-const ModeNotification: React.FC<{ simulationMode: boolean }> = ({ simulationMode }) => {
-  const [showNotification, setShowNotification] = useState(false);
-  const [prevMode, setPrevMode] = useState(simulationMode);
-
-  useEffect(() => {
-    if (simulationMode !== prevMode) {
-      setShowNotification(true);
-      setPrevMode(simulationMode);
-      
-      setTimeout(() => setShowNotification(false), 2000);
-    }
-  }, [simulationMode, prevMode]);
-
-  return (
-    <AnimatePresence>
-      {showNotification && (
-        <motion.div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-          initial={{ opacity: 0, scale: 0.8, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.8, y: -20 }}
-          transition={{ duration: 0.3 }}
-        >
-          <div 
-            className="px-8 py-4 rounded-2xl backdrop-blur-xl border"
-            style={{
-              background: simulationMode 
-                ? 'rgba(170, 0, 255, 0.2)'
-                : 'rgba(0, 255, 255, 0.2)',
-              borderColor: simulationMode
-                ? 'rgba(170, 0, 255, 0.5)'
-                : 'rgba(0, 255, 255, 0.5)',
-              boxShadow: `0 0 40px ${simulationMode ? 'rgba(170, 0, 255, 0.3)' : 'rgba(0, 255, 255, 0.3)'}`,
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <motion.span
-                className="text-3xl"
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 0.5 }}
-              >
-                {simulationMode ? '🎮' : '📷'}
-              </motion.span>
-              <div>
-                <p 
-                  className="text-lg font-semibold tracking-wider"
-                  style={{ color: simulationMode ? '#aa00ff' : '#00ffff' }}
-                >
-                  {simulationMode ? 'MODO SIMULAÇÃO' : 'MODO CÂMERA'}
-                </p>
-                <p className="text-xs text-white/60">
-                  {simulationMode ? 'Controle com mouse ativado' : 'Rastreamento de mão ativado'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
   );
 };
 

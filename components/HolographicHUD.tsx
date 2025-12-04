@@ -5,13 +5,11 @@ import { ContinuousHandMetrics } from '../services/handMetrics';
 interface HolographicHUDProps {
   metrics: ContinuousHandMetrics;
   videoElement: HTMLVideoElement | null;
-  simulationMode?: boolean;
 }
 
 export const HolographicHUD: React.FC<HolographicHUDProps> = ({ 
   metrics, 
-  videoElement, 
-  simulationMode 
+  videoElement 
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -79,8 +77,8 @@ export const HolographicHUD: React.FC<HolographicHUDProps> = ({
         ctx.stroke();
       }
 
-      // Video preview (if available and not simulation)
-      if (!simulationMode && videoElement && videoElement.readyState >= 2) {
+      // Video preview (if available)
+      if (videoElement && videoElement.readyState >= 2) {
         ctx.save();
         ctx.globalAlpha = 0.4;
         ctx.translate(canvas.width, 0);
@@ -144,27 +142,6 @@ export const HolographicHUD: React.FC<HolographicHUDProps> = ({
         });
 
         ctx.shadowBlur = 0;
-      } else if (simulationMode && m.isPresent) {
-        // Simulation cursor visualization
-        const posX = canvas.width / 2 + m.position.x * canvas.width / 2 * 0.8;
-        const posY = canvas.height / 2 - m.position.y * canvas.height / 2 * 0.8;
-
-        // Outer ring
-        ctx.strokeStyle = accentColor;
-        ctx.lineWidth = 2;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = accentColor;
-        ctx.beginPath();
-        ctx.arc(posX, posY, 15 + Math.sin(time * 4) * 3, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Inner dot
-        ctx.fillStyle = accentColor;
-        ctx.beginPath();
-        ctx.arc(posX, posY, 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.shadowBlur = 0;
       }
 
       // Border frame with animated corners
@@ -183,7 +160,7 @@ export const HolographicHUD: React.FC<HolographicHUDProps> = ({
     return () => {
       cancelAnimationFrame(animationRef.current);
     };
-  }, [metrics, videoElement, simulationMode, accentColor]);
+  }, [metrics, videoElement, accentColor]);
 
   return (
     <motion.div
@@ -305,9 +282,7 @@ export const HolographicHUD: React.FC<HolographicHUDProps> = ({
                   <span>
                     EXPR: {Math.round(metrics.expressiveness * 100)}%
                   </span>
-                  <span>
-                    {simulationMode ? '🎮 SIM' : '📷 CAM'}
-                  </span>
+                  <span>📷 CAM</span>
                 </div>
               </div>
             </motion.div>

@@ -9,8 +9,6 @@ interface ControlsProps {
   color: string;
   setColor: (color: string) => void;
   metrics: ContinuousHandMetrics;
-  simulationMode: boolean;
-  setSimulationMode: (mode: boolean) => void;
 }
 
 export const Controls: React.FC<ControlsProps> = ({
@@ -19,8 +17,6 @@ export const Controls: React.FC<ControlsProps> = ({
   color,
   setColor,
   metrics,
-  simulationMode,
-  setSimulationMode,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [hoveredShape, setHoveredShape] = useState<ParticleShape | null>(null);
@@ -172,13 +168,6 @@ export const Controls: React.FC<ControlsProps> = ({
                 className="overflow-hidden"
               >
                 <div className="p-4 space-y-4">
-                  {/* Mode Toggle */}
-                  <ModeToggle 
-                    simulationMode={simulationMode}
-                    setSimulationMode={setSimulationMode}
-                    accentColor={accentColor}
-                  />
-
                   {/* Shape Selector */}
                   <div className="space-y-2">
                     <label className="block text-xs font-medium tracking-wider" style={{ color: `${accentColor}90` }}>
@@ -293,10 +282,8 @@ export const Controls: React.FC<ControlsProps> = ({
                       transition={{ duration: 2, repeat: Infinity }}
                     >
                       {metrics.isPresent 
-                        ? `⚡ ${Math.round(metrics.expressiveness * 100)}% expressividade`
-                        : simulationMode 
-                          ? '🎮 Mova o mouse e clique'
-                          : '👋 Mostre sua mão'}
+                        ? `ƒs­ ${Math.round(metrics.expressiveness * 100)}% expressividade`
+                        : 'Mostre sua mao'}
                     </motion.p>
                   </div>
                 </div>
@@ -421,58 +408,6 @@ const EnergyRing: React.FC<{
     </motion.div>
   );
 };
-
-// Mode Toggle Component
-const ModeToggle: React.FC<{
-  simulationMode: boolean;
-  setSimulationMode: (mode: boolean) => void;
-  accentColor: string;
-}> = ({ simulationMode, setSimulationMode, accentColor }) => (
-  <div className="space-y-2">
-    <label className="block text-xs font-medium tracking-wider" style={{ color: `${accentColor}90` }}>
-      MODO
-    </label>
-    <motion.button
-      onClick={() => setSimulationMode(!simulationMode)}
-      className="w-full py-3 rounded-xl text-sm font-medium tracking-wider relative overflow-hidden"
-      style={{
-        background: simulationMode 
-          ? 'linear-gradient(135deg, rgba(170, 0, 255, 0.3) 0%, rgba(100, 0, 200, 0.4) 100%)'
-          : 'linear-gradient(135deg, rgba(0, 255, 255, 0.15) 0%, rgba(0, 150, 150, 0.2) 100%)',
-        border: `1px solid ${simulationMode ? '#aa00ff' : accentColor}50`,
-        color: simulationMode ? '#aa00ff' : accentColor,
-      }}
-      whileHover={{ scale: 1.02, boxShadow: `0 0 20px ${simulationMode ? '#aa00ff' : accentColor}30` }}
-      whileTap={{ scale: 0.98 }}
-    >
-      {/* Animated background shimmer */}
-      <motion.div
-        className="absolute inset-0"
-        style={{
-          background: `linear-gradient(90deg, transparent 0%, ${simulationMode ? '#aa00ff' : accentColor}20 50%, transparent 100%)`,
-        }}
-        animate={{ x: ['-100%', '200%'] }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-      />
-      
-      <span className="relative z-10 flex items-center justify-center gap-2">
-        <span className="text-lg">{simulationMode ? '🎮' : '📷'}</span>
-        {simulationMode ? 'Mouse Ativo' : 'Câmera'}
-      </span>
-    </motion.button>
-    
-    {simulationMode && (
-      <motion.p
-        className="text-[10px] text-center tracking-wider"
-        style={{ color: '#aa00ff80' }}
-        initial={{ opacity: 0, y: -5 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        Clique esquerdo = Pinça | Direito = Garra
-      </motion.p>
-    )}
-  </div>
-);
 
 // Shape Button Component
 const ShapeButton: React.FC<{

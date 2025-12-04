@@ -224,13 +224,14 @@ const GuideOverlay: React.FC<{
   onDismiss: () => void;
 }> = ({ isVisible, onDismiss }) => {
   const controls = [
-    { icon: '✋', name: 'Abertura', desc: 'Abre/fecha partículas' },
-    { icon: '🤏', name: 'Pinça', desc: 'Atrai para um ponto' },
-    { icon: '✊', name: 'Garra', desc: 'Cria vórtice rotacional' },
-    { icon: '🖐️', name: 'Dispersão', desc: 'Espalha partículas' },
-    { icon: '👆', name: 'Apontar', desc: 'Cria feixe direcional' },
-    { icon: '🏃', name: 'Velocidade', desc: 'Acumula energia' },
+    { icon: 'O', name: 'Abertura', desc: 'Abre/fecha particulas' },
+    { icon: 'P', name: 'Pinca', desc: 'Atrai para um ponto' },
+    { icon: 'G', name: 'Garra', desc: 'Cria vortice rotacional' },
+    { icon: 'D', name: 'Dispersao', desc: 'Espalha particulas' },
+    { icon: 'A', name: 'Apontar', desc: 'Cria feixe direcional' },
+    { icon: 'V', name: 'Velocidade', desc: 'Acumula energia' },
   ];
+
 
   return (
     <div 
@@ -244,10 +245,10 @@ const GuideOverlay: React.FC<{
           className="text-2xl font-extralight text-white/80 tracking-[0.4em] mb-2"
           style={{ fontFamily: '"Orbitron", "Segoe UI", sans-serif' }}
         >
-          CONTROLE CONTÍNUO
+          CONTROLE CONTINUO
         </h2>
         <p className="text-sm text-cyan-300/60 max-w-md">
-          Cada movimento da sua mão controla as partículas de forma fluida e expressiva
+          Cada movimento da sua mao controla as particulas de forma fluida e expressiva
         </p>
       </div>
       
@@ -269,50 +270,21 @@ const GuideOverlay: React.FC<{
       <div className="flex flex-col items-center space-y-3 pointer-events-auto">
         <div className="flex items-center space-x-2 text-xs text-white/40">
           <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-          <span>Aguardando câmera...</span>
+          <span>Aguardando camera...</span>
         </div>
         
-        <div className="flex space-x-3">
-          <button
-            onClick={onEnableSimulation}
-            className="px-5 py-2.5 bg-purple-500/20 border border-purple-400/50 rounded-xl
-                       text-purple-300 text-sm font-medium tracking-wider
-                       hover:bg-purple-500/30 hover:border-purple-400 hover:scale-105
-                       transition-all duration-300 backdrop-blur-sm"
-          >
-            🎮 Simular com Mouse
-          </button>
-          <button
-            onClick={onDismiss}
-            className="px-5 py-2.5 bg-white/5 border border-white/20 rounded-xl
-                       text-white/60 text-sm font-medium tracking-wider
-                       hover:bg-white/10 hover:border-white/40 hover:scale-105
-                       transition-all duration-300 backdrop-blur-sm"
-          >
-            Fechar
-          </button>
-        </div>
+        <button
+          onClick={onDismiss}
+          className="px-5 py-2.5 bg-white/5 border border-white/20 rounded-xl
+                     text-white/60 text-sm font-medium tracking-wider
+                     hover:bg-white/10 hover:border-white/40 hover:scale-105
+                     transition-all duration-300 backdrop-blur-sm"
+        >
+          Fechar
+        </button>
       </div>
     </div>
   );
 };
-
-// Simulation Mode Banner
-const SimulationBanner: React.FC = () => (
-  <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none">
-    <div 
-      className="px-5 py-2.5 rounded-full backdrop-blur-xl animate-pulse"
-      style={{
-        background: 'linear-gradient(135deg, rgba(170, 0, 255, 0.2) 0%, rgba(100, 0, 200, 0.3) 100%)',
-        border: '1px solid rgba(170, 0, 255, 0.5)',
-        boxShadow: '0 0 30px rgba(170, 0, 255, 0.2)',
-      }}
-    >
-      <span className="text-purple-300 text-sm font-mono tracking-wider">
-        🎮 SIMULAÇÃO • <span className="text-purple-400">Esquerdo</span> = Pinça • <span className="text-orange-400">Direito</span> = Garra
-      </span>
-    </div>
-  </div>
-);
 
 export default App;
