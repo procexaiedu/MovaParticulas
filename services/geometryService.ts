@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { ParticleShape } from '../types';
 
-const COUNT = 15000;
-const RADIUS = 4;
+// Lowered particle budget to improve FPS on modest GPUs
+export const PARTICLE_COUNT = 8000;
+const RADIUS = 3.6;
 
-export const generateGeometry = (shape: ParticleShape): Float32Array => {
-  const positions = new Float32Array(COUNT * 3);
+export const generateGeometry = (shape: ParticleShape, count: number = PARTICLE_COUNT): Float32Array => {
+  const positions = new Float32Array(count * 3);
   const tempVec = new THREE.Vector3();
 
-  for (let i = 0; i < COUNT; i++) {
+  for (let i = 0; i < count; i++) {
     const i3 = i * 3;
     let x = 0, y = 0, z = 0;
 
@@ -40,7 +41,7 @@ export const generateGeometry = (shape: ParticleShape): Float32Array => {
 
       case ParticleShape.GALAXY: {
         const arms = 5;
-        const spin = i / COUNT * arms;
+        const spin = i / count * arms;
         const branchAngle = (i % arms) / arms * Math.PI * 2;
         const radius = Math.random() * RADIUS * 1.5;
         const randomX = Math.pow(Math.random(), 3) * (Math.random() < 0.5 ? 1 : -1) * 0.5;
@@ -56,7 +57,7 @@ export const generateGeometry = (shape: ParticleShape): Float32Array => {
       case ParticleShape.FLOWER: {
         // Fibonacci Spiral (Phyllotaxis)
         const phi = Math.PI * (3 - Math.sqrt(5)); // golden angle
-        const yPos = 1 - (i / (COUNT - 1)) * 2; // y goes from 1 to -1
+        const yPos = 1 - (i / Math.max(1, count - 1)) * 2; // y goes from 1 to -1
         const radius = Math.sqrt(1 - yPos * yPos) * RADIUS;
         const theta = phi * i;
 

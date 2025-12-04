@@ -1,33 +1,44 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useRef, useEffect } from 'react';
 import { ContinuousHandMetrics } from '../services/handMetrics';
 
 interface HolographicHUDProps {
   metrics: ContinuousHandMetrics;
   videoElement: HTMLVideoElement | null;
+  simulationMode?: boolean;
 }
+
+// Draw meter helper function
+const drawMeter = (
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  value: number, color: string, label?: string
+) => {
+  ctx.fillStyle = '#222222';
+  ctx.fillRect(x, y, w, h);
+  
+  // Use solid color for the fill
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.9;
+  ctx.fillRect(x, y, w * Math.min(1, value), h);
+  ctx.globalAlpha = 1;
+  
+  if (label) {
+    ctx.font = '8px "Courier New"';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(label, x + w + 5, y + h - 1);
+  }
+};
 
 export const HolographicHUD: React.FC<HolographicHUDProps> = ({ 
   metrics, 
-  videoElement 
+  videoElement, 
+  simulationMode 
 }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
   const timeRef = useRef<number>(0);
+  const trailRef = useRef<Array<{ x: number; y: number; time: number }>>([]);
 
-  // Get dynamic accent color
-  const getAccentColor = () => {
-    if (!metrics.isPresent) return '#00ffff';
-    if (metrics.pinchStrength > 0.5) return '#ff00ff';
-    if (metrics.gripStrength > 0.5) return '#ffaa00';
-    if (metrics.energy > 0.7) return '#ffff00';
-    return '#00ffff';
-  };
-
-  const accentColor = getAccentColor();
-
-  // Canvas rendering for hand visualization
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -40,77 +51,106 @@ export const HolographicHUD: React.FC<HolographicHUDProps> = ({
       const time = timeRef.current;
       const m = metrics;
 
-      canvas.width = 200;
-      canvas.height = 150;
+      canvas.width = 320;
+      canvas.height = 240;
 
+      // Clear
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Background with gradient
-      const bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      bgGrad.addColorStop(0, 'rgba(0, 20, 40, 0.6)');
-      bgGrad.addColorStop(1, 'rgba(0, 10, 30, 0.8)');
-      ctx.fillStyle = bgGrad;
+      // Background
+      ctx.fillStyle = 'rgba(0, 15, 30, 0.4)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Animated scan line
-      const scanY = (time * 50) % canvas.height;
-      ctx.strokeStyle = `${accentColor}30`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, scanY);
-      ctx.lineTo(canvas.width, scanY);
-      ctx.stroke();
-
-      // Grid lines (subtle)
-      ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
-      ctx.lineWidth = 1;
-      for (let x = 0; x < canvas.width; x += 20) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
-        ctx.stroke();
-      }
-      for (let y = 0; y < canvas.height; y += 20) {
+      // Scanlines
+      ctx.strokeStyle = 'rgba(0, 255, 255, 0.02)';
+      for (let y = 0; y < canvas.height; y += 2) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(canvas.width, y);
         ctx.stroke();
       }
 
-      // Video preview (if available)
-      if (videoElement && videoElement.readyState >= 2) {
+      // Dynamic glow color based on metrics
+      const hue = m.isPresent 
+        ? 180 + m.pinchStrength * 60 - m.openness * 30 
+        : 180;
+      const glowColor = `hsl(${hue}, 100%, 60%)`;
+
+      // Border
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = glowColor;
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const pulse = Math.sin(time * 2) * 2;
+      ctx.roundRect(2 + pulse, 2, canvas.width - 4 - pulse * 2, canvas.height - 4, 8);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // === SECTION 1: VIDEO/HAND VISUALIZATION (Right side) ===
+      const vizX = 170;
+      const vizY = 20;
+      const vizW = 140;
+      const vizH = 105;
+
+      // Video or simulation background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(vizX, vizY, vizW, vizH);
+
+      if (!simulationMode && videoElement && videoElement.readyState >= 2) {
         ctx.save();
-        ctx.globalAlpha = 0.4;
-        ctx.translate(canvas.width, 0);
+        ctx.globalAlpha = 0.5;
+        ctx.translate(vizX + vizW, vizY);
         ctx.scale(-1, 1);
-        ctx.filter = 'hue-rotate(180deg) saturate(0.3)';
-        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        ctx.filter = 'hue-rotate(180deg) saturate(0.4)';
+        ctx.drawImage(videoElement, 0, 0, vizW, vizH);
         ctx.filter = 'none';
         ctx.restore();
       }
 
-      // Hand skeleton visualization
+      // Draw hand visualization if present
       if (m.isPresent && m.landmarks.length > 0) {
-        const scaleX = canvas.width * 0.8;
-        const scaleY = canvas.height * 0.8;
-        const offsetX = canvas.width * 0.1;
-        const offsetY = canvas.height * 0.1;
+        // Update trail
+        const trailX = vizX + vizW / 2 + m.position.x * vizW / 2 * 0.8;
+        const trailY = vizY + vizH / 2 - m.position.y * vizH / 2 * 0.8;
+        trailRef.current.push({ x: trailX, y: trailY, time });
+        trailRef.current = trailRef.current.filter(p => time - p.time < 0.4);
+
+        // Draw trail
+        if (trailRef.current.length > 1) {
+          for (let i = 1; i < trailRef.current.length; i++) {
+            const alpha = i / trailRef.current.length * 0.6;
+            ctx.strokeStyle = glowColor;
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(trailRef.current[i - 1].x, trailRef.current[i - 1].y);
+            ctx.lineTo(trailRef.current[i].x, trailRef.current[i].y);
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        }
+
+        // Draw hand skeleton from landmarks
+        const scaleX = vizW * 0.8;
+        const scaleY = vizH * 0.8;
+        const offsetX = vizX + vizW * 0.1;
+        const offsetY = vizY + vizH * 0.1;
 
         // Connections
         const connections = [
-          [0, 1], [1, 2], [2, 3], [3, 4],
-          [0, 5], [5, 6], [6, 7], [7, 8],
-          [0, 9], [9, 10], [10, 11], [11, 12],
-          [0, 13], [13, 14], [14, 15], [15, 16],
-          [0, 17], [17, 18], [18, 19], [19, 20],
-          [5, 9], [9, 13], [13, 17],
+          [0, 1], [1, 2], [2, 3], [3, 4], // Thumb
+          [0, 5], [5, 6], [6, 7], [7, 8], // Index
+          [0, 9], [9, 10], [10, 11], [11, 12], // Middle
+          [0, 13], [13, 14], [14, 15], [15, 16], // Ring
+          [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
+          [5, 9], [9, 13], [13, 17], // Palm
         ];
 
-        // Draw connections with glow
-        ctx.strokeStyle = accentColor;
-        ctx.lineWidth = 2;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = accentColor;
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = glowColor;
 
         connections.forEach(([a, b]) => {
           if (m.landmarks[a] && m.landmarks[b]) {
@@ -120,7 +160,7 @@ export const HolographicHUD: React.FC<HolographicHUDProps> = ({
             const y1 = offsetY + (1 - (la.y / 2 + 0.5)) * scaleY;
             const x2 = offsetX + (1 - (lb.x / 2 + 0.5)) * scaleX;
             const y2 = offsetY + (1 - (lb.y / 2 + 0.5)) * scaleY;
-
+            
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
@@ -133,24 +173,167 @@ export const HolographicHUD: React.FC<HolographicHUDProps> = ({
           const x = offsetX + (1 - (lm.x / 2 + 0.5)) * scaleX;
           const y = offsetY + (1 - (lm.y / 2 + 0.5)) * scaleY;
           const isTip = [4, 8, 12, 16, 20].includes(i);
-
-          ctx.fillStyle = isTip ? '#ffffff' : accentColor;
-          ctx.shadowBlur = isTip ? 12 : 6;
+          
+          ctx.fillStyle = isTip ? '#ffffff' : glowColor;
           ctx.beginPath();
-          ctx.arc(x, y, isTip ? 4 : 3, 0, Math.PI * 2);
+          ctx.arc(x, y, isTip ? 3 : 2, 0, Math.PI * 2);
           ctx.fill();
         });
 
         ctx.shadowBlur = 0;
+      } else if (simulationMode && m.isPresent) {
+        // Simulation mode - show cursor
+        const posX = vizX + vizW / 2 + m.position.x * vizW / 2 * 0.8;
+        const posY = vizY + vizH / 2 - m.position.y * vizH / 2 * 0.8;
+        
+        ctx.fillStyle = glowColor;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = glowColor;
+        ctx.beginPath();
+        ctx.arc(posX, posY, 8 + Math.sin(time * 4) * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
       }
 
-      // Border frame with animated corners
-      const borderPulse = Math.sin(time * 2) * 0.2 + 0.8;
-      ctx.strokeStyle = `${accentColor}${Math.round(borderPulse * 255).toString(16).padStart(2, '0')}`;
+      // Simulation indicator
+      if (simulationMode) {
+        ctx.font = '10px "Courier New"';
+        ctx.fillStyle = '#aa00ff';
+        ctx.fillText('SIMULAÇÃO', vizX + 40, vizY + vizH - 5);
+      }
+
+      // === SECTION 2: METRICS PANEL (Left side) ===
+      const panelX = 10;
+      const panelY = 20;
+
+      // Status
+      ctx.font = 'bold 10px "Courier New"';
+      ctx.fillStyle = m.isPresent ? '#00ff88' : '#ff4444';
+      ctx.fillText(m.isPresent ? '● ONLINE' : '○ OFFLINE', panelX, panelY - 5);
+
+      // Main control labels
+      ctx.font = '9px "Courier New"';
+      ctx.fillStyle = '#888888';
+
+      // === OPENNESS BAR (Primary!) ===
+      const barY = panelY + 10;
+      ctx.fillText('ABERTURA', panelX, barY);
+      drawMeter(ctx, panelX, barY + 3, 100, 12, m.openness, glowColor, 
+        m.openness < 0.3 ? 'FECHADO' : m.openness > 0.7 ? 'ABERTO' : 'NEUTRO');
+
+      // === PINCH BAR ===
+      const pinchY = barY + 28;
+      ctx.fillStyle = '#888888';
+      ctx.fillText('PINÇA', panelX, pinchY);
+      drawMeter(ctx, panelX, pinchY + 3, 100, 10, m.pinchStrength, '#ff00ff');
+
+      // === GRIP BAR ===
+      const gripY = pinchY + 22;
+      ctx.fillStyle = '#888888';
+      ctx.fillText('GARRA', panelX, gripY);
+      drawMeter(ctx, panelX, gripY + 3, 100, 10, m.gripStrength, '#ffaa00');
+
+      // === SPREAD BAR ===
+      const spreadY = gripY + 22;
+      ctx.fillStyle = '#888888';
+      ctx.fillText('DISPERSÃO', panelX, spreadY);
+      drawMeter(ctx, panelX, spreadY + 3, 100, 10, m.fingerSpread, '#00ffaa');
+
+      // === ENERGY BAR ===
+      const energyY = spreadY + 22;
+      ctx.fillStyle = '#888888';
+      ctx.fillText('ENERGIA', panelX, energyY);
+      drawMeter(ctx, panelX, energyY + 3, 100, 10, m.energy, '#ffff00', 
+        `${Math.round(m.energy * 100)}%`);
+
+      // === FINGER CURLS (Mini bars) ===
+      const fingerY = energyY + 28;
+      ctx.fillStyle = '#666666';
+      ctx.font = '8px "Courier New"';
+      ctx.fillText('DEDOS', panelX, fingerY);
+      
+      const fingerLabels = ['P', 'I', 'M', 'A', 'Mn'];
+      const fingerCurls = [m.thumbCurl, m.indexCurl, m.middleCurl, m.ringCurl, m.pinkyCurl];
+      
+      fingerCurls.forEach((curl, i) => {
+        const fx = panelX + i * 20;
+        const fy = fingerY + 4;
+        
+        // Background
+        ctx.fillStyle = '#222222';
+        ctx.fillRect(fx, fy, 16, 25);
+        
+        // Fill based on curl (inverted - shows extension)
+        const extension = 1 - curl;
+        ctx.fillStyle = glowColor;
+        ctx.globalAlpha = 0.3 + extension * 0.7;
+        ctx.fillRect(fx, fy + 25 * (1 - extension), 16, 25 * extension);
+        ctx.globalAlpha = 1;
+        
+        // Label
+        ctx.fillStyle = extension > 0.5 ? '#ffffff' : '#666666';
+        ctx.font = '7px "Courier New"';
+        ctx.fillText(fingerLabels[i], fx + 4, fy + 33);
+      });
+
+      // === POSITION / VELOCITY (Bottom) ===
+      ctx.font = '8px "Courier New"';
+      ctx.fillStyle = '#555555';
+      ctx.fillText(
+        `POS: ${m.position.x.toFixed(2)}, ${m.position.y.toFixed(2)}  VEL: ${m.speed.toFixed(2)}`,
+        panelX, canvas.height - 25
+      );
+      ctx.fillText(
+        `TENSÃO: ${(m.tension * 100).toFixed(0)}%  EXPR: ${(m.expressiveness * 100).toFixed(0)}%`,
+        panelX, canvas.height - 12
+      );
+
+      // === PALM ORIENTATION INDICATOR ===
+      const compassX = vizX + vizW / 2;
+      const compassY = vizY + vizH + 25;
+      const compassR = 15;
+
+      ctx.strokeStyle = '#333333';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect(1, 1, canvas.width - 2, canvas.height - 2, 8);
+      ctx.arc(compassX, compassY, compassR, 0, Math.PI * 2);
       ctx.stroke();
+
+      if (m.isPresent) {
+        // Draw palm direction indicator
+        ctx.fillStyle = glowColor;
+        ctx.beginPath();
+        ctx.arc(
+          compassX + m.palmNormal.x * compassR * 0.7,
+          compassY - m.palmNormal.y * compassR * 0.7,
+          4, 0, Math.PI * 2
+        );
+        ctx.fill();
+
+        ctx.font = '7px "Courier New"';
+        ctx.fillStyle = '#666666';
+        ctx.fillText('PALMA', compassX - 12, compassY + compassR + 10);
+      }
+
+      // === POINTING INDICATOR ===
+      if (m.pointStrength > 0.3) {
+        ctx.fillStyle = '#ff4444';
+        ctx.font = '8px "Courier New"';
+        ctx.fillText('→ APONTANDO', vizX + 30, vizY + vizH + 45);
+      }
+
+      // Corner decorations
+      ctx.strokeStyle = `${glowColor}66`;
+      ctx.lineWidth = 1;
+      [[5, 5], [canvas.width - 5, 5], [5, canvas.height - 5], [canvas.width - 5, canvas.height - 5]].forEach(([cx, cy], i) => {
+        ctx.beginPath();
+        const dx = i % 2 === 0 ? 15 : -15;
+        const dy = i < 2 ? 15 : -15;
+        ctx.moveTo(cx, cy + dy);
+        ctx.lineTo(cx, cy);
+        ctx.lineTo(cx + dx, cy);
+        ctx.stroke();
+      });
 
       animationRef.current = requestAnimationFrame(draw);
     };
@@ -160,290 +343,19 @@ export const HolographicHUD: React.FC<HolographicHUDProps> = ({
     return () => {
       cancelAnimationFrame(animationRef.current);
     };
-  }, [metrics, videoElement, accentColor]);
+  }, [metrics, videoElement, simulationMode]);
 
   return (
-    <motion.div
-      className="absolute bottom-6 left-6 z-20"
-      initial={{ opacity: 0, x: -50 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.5, delay: 0.3 }}
-    >
-      {/* Main Container */}
-      <motion.div
-        className="relative overflow-hidden rounded-2xl"
+    <div className="absolute bottom-6 left-6 z-20">
+      <canvas
+        ref={canvasRef}
+        className="rounded-xl shadow-2xl"
         style={{
-          background: 'linear-gradient(135deg, rgba(0, 20, 40, 0.9) 0%, rgba(0, 10, 30, 0.95) 100%)',
-          backdropFilter: 'blur(20px)',
-          border: `1px solid ${accentColor}40`,
-          boxShadow: `0 0 30px ${accentColor}20, inset 0 0 30px rgba(0, 0, 0, 0.5)`,
+          background: 'linear-gradient(135deg, rgba(0,10,20,0.85) 0%, rgba(0,30,60,0.7) 100%)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(0,255,255,0.2)',
         }}
-        animate={{
-          borderColor: `${accentColor}40`,
-          boxShadow: `0 0 30px ${accentColor}20, inset 0 0 30px rgba(0, 0, 0, 0.5)`,
-        }}
-        transition={{ duration: 0.3 }}
-      >
-        {/* Header */}
-        <div 
-          className="flex items-center justify-between px-4 py-2 cursor-pointer border-b"
-          style={{ borderColor: `${accentColor}20` }}
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          <div className="flex items-center gap-2">
-            <motion.div
-              className="w-2 h-2 rounded-full"
-              style={{ background: metrics.isPresent ? '#00ff88' : '#ff4444' }}
-              animate={{
-                scale: metrics.isPresent ? [1, 1.2, 1] : 1,
-                boxShadow: metrics.isPresent 
-                  ? ['0 0 5px #00ff88', '0 0 15px #00ff88', '0 0 5px #00ff88']
-                  : '0 0 5px #ff4444',
-              }}
-              transition={{ duration: 1, repeat: Infinity }}
-            />
-            <span className="text-xs font-mono tracking-wider" style={{ color: accentColor }}>
-              {metrics.isPresent ? 'TRACKING' : 'OFFLINE'}
-            </span>
-          </div>
-          
-          <motion.button
-            className="text-white/40 hover:text-white/80 transition-colors"
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d={isExpanded 
-                ? "M4 10l4-4 4 4" 
-                : "M4 6l4 4 4-4"
-              } stroke="currentColor" strokeWidth="2" fill="none" />
-            </svg>
-          </motion.button>
-        </div>
-
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              {/* Hand Visualization Canvas */}
-              <div className="p-3">
-                <canvas
-                  ref={canvasRef}
-                  className="rounded-lg w-full"
-                  style={{ maxWidth: 200 }}
-                />
-              </div>
-
-              {/* Metrics Section */}
-              <div className="px-3 pb-3 space-y-3">
-                {/* Finger Arc Indicators */}
-                <FingerArcs metrics={metrics} accentColor={accentColor} />
-
-                {/* Primary Metrics */}
-                <div className="grid grid-cols-2 gap-2">
-                  <MetricBar 
-                    label="Abertura" 
-                    value={metrics.openness} 
-                    color="#00ffff"
-                    icon="🖐️"
-                  />
-                  <MetricBar 
-                    label="Pinça" 
-                    value={metrics.pinchStrength} 
-                    color="#ff00ff"
-                    icon="🤏"
-                  />
-                  <MetricBar 
-                    label="Garra" 
-                    value={metrics.gripStrength} 
-                    color="#ffaa00"
-                    icon="✊"
-                  />
-                  <MetricBar 
-                    label="Energia" 
-                    value={metrics.energy} 
-                    color="#ffff00"
-                    icon="⚡"
-                  />
-                </div>
-
-                {/* Status Footer */}
-                <div 
-                  className="flex justify-between items-center pt-2 border-t text-[10px] font-mono"
-                  style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)' }}
-                >
-                  <span>
-                    VEL: {metrics.speed.toFixed(2)}
-                  </span>
-                  <span>
-                    EXPR: {Math.round(metrics.expressiveness * 100)}%
-                  </span>
-                  <span>📷 CAM</span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-
-      {/* Floating decorative elements */}
-      <FloatingDecorations accentColor={accentColor} isPresent={metrics.isPresent} />
-    </motion.div>
-  );
-};
-
-// Finger Arc Indicators
-const FingerArcs: React.FC<{ metrics: ContinuousHandMetrics; accentColor: string }> = ({ 
-  metrics, 
-  accentColor 
-}) => {
-  const fingers = [
-    { label: 'P', value: 1 - metrics.thumbCurl, color: '#ff6b6b' },
-    { label: 'I', value: 1 - metrics.indexCurl, color: '#ffd93d' },
-    { label: 'M', value: 1 - metrics.middleCurl, color: '#6bcb77' },
-    { label: 'A', value: 1 - metrics.ringCurl, color: '#4d96ff' },
-    { label: 'Mn', value: 1 - metrics.pinkyCurl, color: '#9b59b6' },
-  ];
-
-  return (
-    <div className="flex justify-center gap-1">
-      {fingers.map((finger, i) => (
-        <div key={i} className="flex flex-col items-center">
-          <svg width="28" height="28" className="transform -rotate-90">
-            <circle
-              cx="14"
-              cy="14"
-              r="10"
-              fill="none"
-              stroke="rgba(255,255,255,0.1)"
-              strokeWidth="3"
-            />
-            <motion.circle
-              cx="14"
-              cy="14"
-              r="10"
-              fill="none"
-              stroke={finger.color}
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray={62.8}
-              initial={{ strokeDashoffset: 62.8 }}
-              animate={{ strokeDashoffset: 62.8 * (1 - finger.value) }}
-              transition={{ duration: 0.15 }}
-              style={{
-                filter: finger.value > 0.5 ? `drop-shadow(0 0 3px ${finger.color})` : 'none',
-              }}
-            />
-          </svg>
-          <span 
-            className="text-[8px] font-mono mt-0.5"
-            style={{ color: finger.value > 0.5 ? finger.color : 'rgba(255,255,255,0.4)' }}
-          >
-            {finger.label}
-          </span>
-        </div>
-      ))}
+      />
     </div>
   );
 };
-
-// Individual Metric Bar
-const MetricBar: React.FC<{
-  label: string;
-  value: number;
-  color: string;
-  icon: string;
-}> = ({ label, value, color, icon }) => (
-  <div className="space-y-1">
-    <div className="flex items-center justify-between">
-      <span className="text-[9px] text-white/50 flex items-center gap-1">
-        <span className="text-xs">{icon}</span>
-        {label}
-      </span>
-      <span 
-        className="text-[9px] font-mono"
-        style={{ color: value > 0.5 ? color : 'rgba(255,255,255,0.4)' }}
-      >
-        {Math.round(value * 100)}%
-      </span>
-    </div>
-    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-      <motion.div
-        className="h-full rounded-full"
-        style={{
-          background: `linear-gradient(90deg, ${color}80, ${color})`,
-          boxShadow: value > 0.3 ? `0 0 8px ${color}` : 'none',
-        }}
-        initial={{ width: 0 }}
-        animate={{ width: `${value * 100}%` }}
-        transition={{ duration: 0.15 }}
-      />
-    </div>
-  </div>
-);
-
-// Floating Decorative Elements
-const FloatingDecorations: React.FC<{ accentColor: string; isPresent: boolean }> = ({ 
-  accentColor, 
-  isPresent 
-}) => (
-  <>
-    {/* Corner bracket - top left */}
-    <motion.svg
-      className="absolute -top-2 -left-2 w-6 h-6"
-      initial={{ opacity: 0, scale: 0 }}
-      animate={{ opacity: isPresent ? 0.6 : 0.3, scale: 1 }}
-      transition={{ delay: 0.5 }}
-    >
-      <path
-        d="M 2 12 L 2 2 L 12 2"
-        fill="none"
-        stroke={accentColor}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </motion.svg>
-
-    {/* Corner bracket - bottom right */}
-    <motion.svg
-      className="absolute -bottom-2 -right-2 w-6 h-6"
-      initial={{ opacity: 0, scale: 0 }}
-      animate={{ opacity: isPresent ? 0.6 : 0.3, scale: 1 }}
-      transition={{ delay: 0.6 }}
-    >
-      <path
-        d="M 22 12 L 22 22 L 12 22"
-        fill="none"
-        stroke={accentColor}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </motion.svg>
-
-    {/* Floating data lines */}
-    {isPresent && (
-      <motion.div
-        className="absolute -right-8 top-1/2 -translate-y-1/2 flex flex-col gap-1"
-        initial={{ opacity: 0, x: -10 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.7 }}
-      >
-        {[0, 1, 2].map((i) => (
-          <motion.div
-            key={i}
-            className="h-[2px] rounded-full"
-            style={{ background: accentColor, width: 10 + i * 8 }}
-            animate={{ opacity: [0.3, 0.8, 0.3] }}
-            transition={{ duration: 1.5, delay: i * 0.2, repeat: Infinity }}
-          />
-        ))}
-      </motion.div>
-    )}
-  </>
-);
-
-export default HolographicHUD;

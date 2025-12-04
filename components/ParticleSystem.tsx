@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ParticleShape } from '../types';
@@ -9,46 +9,32 @@ interface ParticleSystemProps {
   shape: ParticleShape;
   color: string;
   metrics: ContinuousHandMetrics;
-  onShapeTransition?: (progress: number) => void;
 }
 
 const COUNT = 15000;
-const TRANSITION_DURATION = 1.5; // seconds
 
 /**
- * Continuous Control Particle System with Cinematic Transitions
+ * Continuous Control Particle System
  * 
- * Enhanced with:
- * - Dramatic shape transitions with dissolve effect
- * - Particle ejection during transitions
- * - Dynamic flash effects
- * - Smooth interpolation with easing
+ * Instead of discrete gesture states, this system responds to continuous
+ * hand metrics for expressive, instrument-like control:
+ * 
+ * - OPENNESS: Controls expansion/contraction of particles
+ * - PINCH: Creates attraction point with adjustable strength
+ * - FINGER SPREAD: Controls particle dispersion/chaos
+ * - GRIP: Controls rotation speed and vortex effect
+ * - PALM TILT: Controls directional flow
+ * - ENERGY: Controls particle size and brightness
+ * - POINT: Creates directional beam
  */
-export const ParticleSystem: React.FC<ParticleSystemProps> = ({ 
-  shape, 
-  color, 
-  metrics,
-  onShapeTransition 
-}) => {
+export const ParticleSystem: React.FC<ParticleSystemProps> = ({ shape, color, metrics }) => {
   const pointsRef = useRef<THREE.Points>(null);
   const materialRef = useRef<THREE.PointsMaterial>(null);
-  const lightRef = useRef<THREE.PointLight>(null);
-  
-  // Transition state
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const transitionRef = useRef({
-    progress: 0,
-    startTime: 0,
-    previousTargets: null as Float32Array | null,
-    flashIntensity: 0,
-  });
-  const prevShapeRef = useRef(shape);
   
   // Buffers
   const currentPositions = useMemo(() => new Float32Array(COUNT * 3), []);
   const targetPositions = useMemo(() => generateGeometry(shape), [shape]);
   const velocities = useMemo(() => new Float32Array(COUNT * 3), []);
-  const ejectionForces = useMemo(() => new Float32Array(COUNT * 3), []);
   
   // Per-particle properties
   const particlePhases = useMemo(() => {
@@ -63,17 +49,6 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
     return arr;
   }, []);
 
-  // Particle colors for transition effect
-  const particleColors = useMemo(() => {
-    const colors = new Float32Array(COUNT * 3);
-    for (let i = 0; i < COUNT; i++) {
-      colors[i * 3] = 1;
-      colors[i * 3 + 1] = 1;
-      colors[i * 3 + 2] = 1;
-    }
-    return colors;
-  }, []);
-
   // Initialize positions
   useEffect(() => {
     for (let i = 0; i < COUNT * 3; i++) {
@@ -81,34 +56,11 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
     }
   }, [currentPositions]);
 
-  // Handle shape change with cinematic transition
+  // Update targets when shape changes
   useEffect(() => {
-    if (shape !== prevShapeRef.current) {
-      // Store previous targets for smooth interpolation
-      transitionRef.current.previousTargets = new Float32Array(targetPositions);
-      transitionRef.current.progress = 0;
-      transitionRef.current.startTime = performance.now() / 1000;
-      transitionRef.current.flashIntensity = 1;
-      
-      // Generate ejection forces for dramatic effect
-      for (let i = 0; i < COUNT; i++) {
-        const i3 = i * 3;
-        const angle = Math.random() * Math.PI * 2;
-        const strength = 0.5 + Math.random() * 1.5;
-        ejectionForces[i3] = Math.cos(angle) * strength;
-        ejectionForces[i3 + 1] = (Math.random() - 0.3) * strength;
-        ejectionForces[i3 + 2] = Math.sin(angle) * strength;
-      }
-      
-      setIsTransitioning(true);
-      
-      // Update targets
-      const newTargets = generateGeometry(shape);
-      targetPositions.set(newTargets);
-      
-      prevShapeRef.current = shape;
-    }
-  }, [shape, targetPositions, ejectionForces]);
+    const newTargets = generateGeometry(shape);
+    targetPositions.set(newTargets);
+  }, [shape, targetPositions]);
 
   // Dynamic color based on metrics
   useEffect(() => {
@@ -117,17 +69,21 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
     const baseColor = new THREE.Color(color);
     
     if (metrics.isPresent) {
+      // Shift hue based on openness and energy
       const hsl = { h: 0, s: 0, l: 0 };
       baseColor.getHSL(hsl);
+      
+      // Energy adds saturation and shifts toward warmer colors
       hsl.s = Math.min(1, hsl.s + metrics.energy * 0.3);
       hsl.h = (hsl.h + metrics.pinchStrength * 0.1 - metrics.openness * 0.05 + 1) % 1;
+      
       baseColor.setHSL(hsl.h, hsl.s, hsl.l);
     }
     
     materialRef.current.color = baseColor;
   }, [color, metrics.energy, metrics.pinchStrength, metrics.openness, metrics.isPresent]);
 
-  // Particle texture with enhanced glow
+  // Particle texture
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 64;
@@ -136,9 +92,8 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
     if (ctx) {
       const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
       gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.1, 'rgba(255,255,255,0.9)');
-      gradient.addColorStop(0.25, 'rgba(255,255,255,0.6)');
-      gradient.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+      gradient.addColorStop(0.15, 'rgba(255,255,255,0.8)');
+      gradient.addColorStop(0.4, 'rgba(255,255,255,0.3)');
       gradient.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 64, 64);
@@ -146,63 +101,50 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
     return new THREE.CanvasTexture(canvas);
   }, []);
 
-  // Easing function for smooth transitions
-  const easeOutExpo = (t: number): number => {
-    return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
-  };
-
-  const easeInOutQuart = (t: number): number => {
-    return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
-  };
-
   useFrame((state) => {
     if (!pointsRef.current) return;
 
     const positions = pointsRef.current.geometry.attributes.position.array as Float32Array;
     const time = state.clock.getElapsedTime();
-    const m = metrics;
-    const transition = transitionRef.current;
+    const m = metrics; // shorthand
 
-    // === TRANSITION ANIMATION ===
-    let transitionFactor = 0;
-    let ejectionFactor = 0;
+    // === PHYSICS PARAMETERS DERIVED FROM METRICS ===
     
-    if (isTransitioning) {
-      const elapsed = time - transition.startTime;
-      transition.progress = Math.min(1, elapsed / TRANSITION_DURATION);
-      transitionFactor = easeInOutQuart(transition.progress);
-      
-      // Ejection is strongest at the beginning
-      ejectionFactor = Math.max(0, 1 - elapsed / 0.5) * easeOutExpo(elapsed * 3);
-      
-      // Flash effect
-      transition.flashIntensity = Math.max(0, 1 - elapsed / 0.3);
-      
-      // Notify parent of transition progress
-      onShapeTransition?.(transition.progress);
-      
-      if (transition.progress >= 1) {
-        setIsTransitioning(false);
-        transition.previousTargets = null;
-      }
-    }
-
-    // === PHYSICS PARAMETERS ===
+    // Base lerp factor - faster when hand is present
     const baseLerp = m.isPresent ? 0.06 : 0.03;
-    const transitionLerp = isTransitioning ? 0.08 + transitionFactor * 0.04 : baseLerp;
+    
+    // Damping - less damping = more momentum
+    // High grip = more momentum, high openness = more damping
     const baseDamping = 0.9 + m.openness * 0.05 - m.gripStrength * 0.08;
     
+    // Hand position in 3D space (scaled)
     const handX = m.position.x * 5;
     const handY = m.position.y * 5;
-    const handZ = m.position.z * 3;
+    // Use explicit depth metric for Z, scaled for scene depth
+    // m.position.z already contains depth, but we scale it specifically here
+    const handZ = m.depth * 4;
     
+    // Pinch position
     const pinchX = m.pinchPosition.x * 5;
     const pinchY = m.pinchPosition.y * 5;
-    const pinchZ = m.pinchPosition.z * 3;
+    // Pinch Z should follow hand depth + relative finger offset
+    const pinchZ = handZ + m.pinchPosition.z * 3;
 
+    // === EXPANSION FACTOR ===
+    // Openness directly controls how far particles spread from targets
+    // 0 = contracted to point, 1 = full shape, >1 = expanded
     const expansionFactor = 0.3 + m.openness * 1.2;
+
+    // === CHAOS/TURBULENCE ===
+    // Finger spread and energy add turbulence
     const turbulence = m.fingerSpread * 0.5 + m.energy * 0.3;
+
+    // === VORTEX STRENGTH ===
+    // Grip creates rotation/vortex
     const vortexStrength = m.gripStrength * 2;
+
+    // === DIRECTIONAL FLOW ===
+    // Palm tilt creates sideways drift
     const driftX = m.palmTilt * m.expressiveness * 0.5;
     const driftY = m.palmNormal.y * m.expressiveness * 0.3;
 
@@ -215,38 +157,15 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
         z: particleSeeds[i3 + 2],
       };
 
+      // Current position
       const px = positions[i3];
       const py = positions[i3 + 1];
       const pz = positions[i3 + 2];
 
-      // === INTERPOLATE TARGETS DURING TRANSITION ===
+      // Base target from shape
       let tx = targetPositions[i3];
       let ty = targetPositions[i3 + 1];
       let tz = targetPositions[i3 + 2];
-
-      if (isTransitioning && transition.previousTargets) {
-        const prevTx = transition.previousTargets[i3];
-        const prevTy = transition.previousTargets[i3 + 1];
-        const prevTz = transition.previousTargets[i3 + 2];
-        
-        // Smooth interpolation between shapes
-        tx = prevTx + (tx - prevTx) * transitionFactor;
-        ty = prevTy + (ty - prevTy) * transitionFactor;
-        tz = prevTz + (tz - prevTz) * transitionFactor;
-        
-        // Add ejection force during transition
-        if (ejectionFactor > 0) {
-          tx += ejectionForces[i3] * ejectionFactor * 3;
-          ty += ejectionForces[i3 + 1] * ejectionFactor * 3;
-          tz += ejectionForces[i3 + 2] * ejectionFactor * 3;
-        }
-        
-        // Add swirl effect during transition
-        const swirlPhase = phase + time * 3;
-        const swirlRadius = (1 - transitionFactor) * 2;
-        tx += Math.cos(swirlPhase) * swirlRadius * seed.x;
-        tz += Math.sin(swirlPhase) * swirlRadius * seed.z;
-      }
 
       // Distance from hand
       const dxHand = px - handX;
@@ -262,6 +181,7 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
 
       if (m.isPresent) {
         // === 1. EXPANSION/CONTRACTION ===
+        // Scale target distance from origin based on openness
         const targetDist = Math.sqrt(tx * tx + ty * ty + tz * tz);
         if (targetDist > 0.1) {
           const scaledDist = targetDist * expansionFactor;
@@ -272,12 +192,14 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
         }
 
         // === 2. PINCH ATTRACTION ===
+        // Strong pinch creates gravitational attraction to pinch point
         if (m.pinchStrength > 0.2) {
           const dxPinch = px - pinchX;
           const dyPinch = py - pinchY;
           const dzPinch = pz - pinchZ;
           const distToPinch = Math.sqrt(dxPinch * dxPinch + dyPinch * dyPinch + dzPinch * dzPinch);
           
+          // Inverse square attraction
           const attractionForce = m.pinchStrength * 3 / Math.max(0.5, distToPinch);
           const attractMix = Math.min(1, attractionForce * 0.3);
           
@@ -285,6 +207,7 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
           ty = ty * (1 - attractMix) + pinchY * attractMix;
           tz = tz * (1 - attractMix) + pinchZ * attractMix;
           
+          // Add spiral when very close
           if (distToPinch < 2 && m.pinchStrength > 0.5) {
             const spiralAngle = time * 4 + phase;
             const spiralRadius = distToPinch * 0.3;
@@ -300,10 +223,13 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
           const cosA = Math.cos(angle * 0.1);
           const sinA = Math.sin(angle * 0.1);
           
+          // Rotate around hand position
           const relX = tx - handX;
           const relZ = tz - handZ;
           tx = handX + relX * cosA - relZ * sinA;
           tz = handZ + relX * sinA + relZ * cosA;
+          
+          // Add vertical oscillation
           ty += Math.sin(angle + phase) * proximity * m.gripStrength * 0.5;
         }
 
@@ -315,7 +241,7 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
           tz += Math.sin(time * turbFreq * 0.9 + phase * 5) * turbulence * seed.z;
         }
 
-        // === 5. DIRECTIONAL FLOW ===
+        // === 5. DIRECTIONAL FLOW (PALM TILT) ===
         tx += driftX;
         ty += driftY;
 
@@ -326,6 +252,7 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
             const beamLength = 8 * m.pointStrength;
             const beamProgress = (i % 100) / 100;
             
+            // Project along pointing direction
             const beamX = handX + m.pointDirection.x * beamLength * beamProgress;
             const beamY = handY + m.pointDirection.y * beamLength * beamProgress;
             const beamZ = handZ + m.pointDirection.z * beamLength * beamProgress;
@@ -335,18 +262,21 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
             ty = ty * (1 - beamMix) + beamY * beamMix;
             tz = tz * (1 - beamMix) + beamZ * beamMix;
             
+            // Add spread along beam
             tx += seed.x * beamProgress * 0.3;
             ty += seed.y * beamProgress * 0.3;
           }
         }
 
         // === 7. INDIVIDUAL FINGER EFFECTS ===
+        // Each curled finger adds a subtle wave
         const fingerWave = (
           m.indexCurl * Math.sin(time * 2 + phase) +
           m.middleCurl * Math.sin(time * 2.5 + phase * 1.2) +
           m.ringCurl * Math.sin(time * 3 + phase * 1.4) +
           m.pinkyCurl * Math.sin(time * 3.5 + phase * 1.6)
         ) * 0.1;
+        
         ty += fingerWave * (1 - m.openness);
 
         // === 8. VELOCITY-BASED TRAILS ===
@@ -366,17 +296,19 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
       }
 
       // === PHYSICS UPDATE ===
-      const lerpFactor = transitionLerp + m.expressiveness * 0.03;
+      const lerpFactor = baseLerp + m.expressiveness * 0.03;
       
       velocities[i3]     += (tx - px) * lerpFactor;
       velocities[i3 + 1] += (ty - py) * lerpFactor;
       velocities[i3 + 2] += (tz - pz) * lerpFactor;
 
+      // Variable damping
       const damping = baseDamping - m.energy * 0.05;
       velocities[i3]     *= damping;
       velocities[i3 + 1] *= damping;
       velocities[i3 + 2] *= damping;
 
+      // Update positions
       positions[i3]     += velocities[i3];
       positions[i3 + 1] += velocities[i3 + 1];
       positions[i3 + 2] += velocities[i3 + 2];
@@ -387,66 +319,39 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({
     // === SYSTEM ROTATION ===
     const baseRotation = time * 0.03;
     const gripRotation = m.gripStrength * time * 0.2;
-    const transitionRotation = isTransitioning ? Math.sin(time * 2) * 0.1 * (1 - transitionFactor) : 0;
-    pointsRef.current.rotation.y = baseRotation + gripRotation + transitionRotation;
+    pointsRef.current.rotation.y = baseRotation + gripRotation;
     pointsRef.current.rotation.z = time * 0.01 + m.palmTilt * 0.3;
 
     // === DYNAMIC PARTICLE SIZE ===
     if (materialRef.current) {
+      // Size based on energy and openness
       const baseSize = 0.1;
       const energyBoost = m.energy * 0.08;
-      const opennessEffect = (1 - m.openness) * 0.03;
-      const transitionBoost = isTransitioning ? (1 - transitionFactor) * 0.05 : 0;
-      materialRef.current.size = baseSize + energyBoost + opennessEffect + transitionBoost;
-      
-      // Flash effect during transition
-      if (isTransitioning && transition.flashIntensity > 0) {
-        materialRef.current.opacity = 0.8 + transition.flashIntensity * 0.2;
-      } else {
-        materialRef.current.opacity = 0.9;
-      }
-    }
-
-    // === TRANSITION LIGHT FLASH ===
-    if (lightRef.current) {
-      lightRef.current.intensity = transition.flashIntensity * 5;
+      const opennessEffect = (1 - m.openness) * 0.03; // Smaller when closed
+      materialRef.current.size = baseSize + energyBoost + opennessEffect;
     }
   });
 
   return (
-    <group>
-      <points ref={pointsRef}>
-        <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            count={COUNT}
-            array={currentPositions}
-            itemSize={3}
-          />
-        </bufferGeometry>
-        <pointsMaterial
-          ref={materialRef}
-          size={0.12}
-          color={color}
-          map={texture}
-          transparent
-          opacity={0.9}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          sizeAttenuation={true}
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          count={COUNT}
+          array={currentPositions}
+          itemSize={3}
         />
-      </points>
-      
-      {/* Transition flash light */}
-      <pointLight
-        ref={lightRef}
+      </bufferGeometry>
+      <pointsMaterial
+        ref={materialRef}
+        size={0.12}
         color={color}
-        intensity={0}
-        distance={20}
-        decay={2}
+        map={texture}
+        transparent
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        sizeAttenuation={true}
       />
-    </group>
+    </points>
   );
 };
-
-export default ParticleSystem;
